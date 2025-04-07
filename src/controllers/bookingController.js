@@ -130,6 +130,158 @@ const generateIds = (type) => {
 //     res.status(500).json({ message: "Internal server error" });
 //   }
 // };
+// const addBooking = async (req, res) => {
+//   console.log("addBooking");
+//   try {
+//     const {
+//       yachtId,
+//       ownerId,
+//       startDate,
+//       endDate,
+//       startTime,
+//       endTime,
+//       tripDuration,
+//       groupSize,
+//       maxCapacity,
+//       pricing,
+//       amount,
+//       occasion,
+//       instabookId,
+//       userId,
+//       exchangeRate = 1,
+//       name,
+//       email,
+//       phone,
+//       FRONTEND_URL,
+
+//     } = req.body;
+
+//     let user;
+//     let owner;
+// console.log("body",req.body) 
+//     if (!userId) {
+     
+//       if (!name || !email || !phone) {
+//         return res.status(400).json({ message: "Guest booking requires name, email, and phone." });
+//       }
+
+//       // Check if user exists with the same email or phone number
+//       user = await UserModel.findOne({ $or: [{ email }, { phone }] });
+// console.log("user",user)
+//       if (user) {
+//         if (user.email !== email || user.phone !== phone) {
+//           return res.status(400).json({ message: "Email or phone number conflict. Please log in or use a different contact." });
+//         }
+//       } else {
+//         // Create a new user as a guest
+//         user = new UserModel({
+//           name,
+//           email,
+//           phone,
+//           role: "g",
+//           isGuest: true,
+//         });
+//         await user.save();
+//       }
+//     } else {
+//       // Fetch existing user by userId
+//       user = await UserModel.findById(userId);
+
+//       if (!user) {
+//         return res.status(404).json({ message: "User not found" });
+//       }
+
+//       // Update phone number if not already present
+//       if (!user.phone && phone) {
+//         user.phone = phone;
+//         await user.save();
+//       }
+
+//       // Validate user data consistency
+//       if ((email && user.email !== email) || (phone && user.phone !== phone)) {
+//         return res.status(400).json({ message: "User data conflict. Please log in or use consistent contact details." });
+//       }
+//     }
+
+   
+
+//     const newBooking = new bookingModel({
+//       userId: user._id,
+//       yachtId,
+//       startDate,
+//       endDate,
+//       startTime,
+//       endTime,
+//       tripDuration,
+//       groupSize,
+//       maxCapacity,
+//       pricing,
+//       bookingRef: generateIds("YB"),
+//       txnId: generateIds("TXN"),
+//       occasion,
+//       amount,
+//       exchangeRate: exchangeRate || 1,
+//       ownerId,
+//       status: "pending",
+//     });
+
+//     console.log("New Booking:", newBooking);
+
+//     const savedBooking = await newBooking.save();
+//     console.log("Saved Booking:", savedBooking);
+
+//     const session = await CreateCheckoutSession(
+//       user.email,
+//       pricing,
+//       savedBooking._id,
+//       savedBooking.bookingRef,
+//       instabookId,
+//       yachtId,
+//       FRONTEND_URL
+//     );
+// console.log("session",session)
+//     if (session) {
+//       const newPayment = new PaymentModel({
+//         bookingId: savedBooking._id,
+//         userId: user._id,
+//         ownerId,
+//         currency: "usd",
+//         txnId: savedBooking.txnId,
+//         amountPaid: amount || pricing.totals.totalRenterPayment,
+//         sessionId: session.id,
+//         totalAmount: pricing.totals.totalRenterPayment,
+//         amount: amount || pricing.totals.totalRenterPayment,
+//         partialPayments: [
+//           {
+//             amount: 0,
+//             method: "Card",
+//             status: "pending",
+//           },
+//         ],
+//         paymentStatus: "pending",
+//         ownerPayoutDetails: {
+//           payoutAmount: pricing.totals.totalPayout,
+//           payoutCurrency: "USD",
+//           exchangeRate: exchangeRate || 1,
+//         },
+//         exchangeRate: exchangeRate || 1,
+//         status: "pending",
+//       });
+      
+//       const savedPayment = await newPayment.save();
+//       await bookingModel.findByIdAndUpdate(savedBooking._id, { paymentId: savedPayment._id }, { new: true });
+
+//       res.status(201).json({ url: session.url });
+//     } else {
+//       console.log("session not found")
+//       res.status(400).json({ error: "try again" });
+//     }
+//   } catch (error) {
+//     console.error("Error creating booking:", error);
+//     res.status(500).json({ message: "Something went wrong" });
+//   }
+// };
+
 const addBooking = async (req, res) => {
   console.log("addBooking");
   try {
@@ -153,27 +305,20 @@ const addBooking = async (req, res) => {
       email,
       phone,
       FRONTEND_URL,
-
     } = req.body;
 
     let user;
-    let owner;
-console.log("body",req.body) 
-    if (!userId) {
-     
+
+    if (!userId) { // ✅ Guest Booking Flow
       if (!name || !email || !phone) {
         return res.status(400).json({ message: "Guest booking requires name, email, and phone." });
       }
 
-      // Check if user exists with the same email or phone number
-      user = await UserModel.findOne({ $or: [{ email }, { phone }] });
+      // ✅ Check if a guest user with the same email and phone already exists
+      user = await UserModel.findOne({ email, isGuest: true });
 console.log("user",user)
-      if (user) {
-        if (user.email !== email || user.phone !== phone) {
-          return res.status(400).json({ message: "Email or phone number conflict. Please log in or use a different contact." });
-        }
-      } else {
-        // Create a new user as a guest
+      if (!user) {
+        // ✅ Create a new guest user only if not found
         user = new UserModel({
           name,
           email,
@@ -181,30 +326,43 @@ console.log("user",user)
           role: "g",
           isGuest: true,
         });
-        await user.save();
+
+        try {
+          await user.save();
+          console.log("Guest user created:", user);
+        } catch (err) {
+          if (err.code === 11000) {
+            // Duplicate key error
+            user = await UserModel.findOne({ email, phone, isGuest: true });
+            console.log("Guest user already exists, using existing:", user);
+          } else {
+            console.error("Error saving guest user:", err);
+            return res.status(500).json({ message: "Error creating guest user" });
+          }
+        }
+      } else {
+        console.log("Using existing guest user:", user);
       }
-    } else {
-      // Fetch existing user by userId
+    } else { // ✅ Registered User Flow
       user = await UserModel.findById(userId);
 
       if (!user) {
         return res.status(404).json({ message: "User not found" });
       }
 
-      // Update phone number if not already present
+      // ✅ Update phone number if not already present
       if (!user.phone && phone) {
         user.phone = phone;
         await user.save();
       }
 
-      // Validate user data consistency
-      if ((email && user.email !== email) || (phone && user.phone !== phone)) {
+      // ✅ Validate user data consistency
+      if (email && user.email !== email) {
         return res.status(400).json({ message: "User data conflict. Please log in or use consistent contact details." });
       }
     }
 
-   
-
+    // ✅ Create Booking
     const newBooking = new bookingModel({
       userId: user._id,
       yachtId,
@@ -230,6 +388,7 @@ console.log("user",user)
     const savedBooking = await newBooking.save();
     console.log("Saved Booking:", savedBooking);
 
+    // ✅ Create Stripe Checkout Session
     const session = await CreateCheckoutSession(
       user.email,
       pricing,
@@ -239,8 +398,10 @@ console.log("user",user)
       yachtId,
       FRONTEND_URL
     );
-console.log("session",session)
+    console.log("Stripe session created:", session);
+
     if (session) {
+      // ✅ Create Payment Entry
       const newPayment = new PaymentModel({
         bookingId: savedBooking._id,
         userId: user._id,
@@ -267,13 +428,13 @@ console.log("session",session)
         exchangeRate: exchangeRate || 1,
         status: "pending",
       });
-      
+
       const savedPayment = await newPayment.save();
       await bookingModel.findByIdAndUpdate(savedBooking._id, { paymentId: savedPayment._id }, { new: true });
 
       res.status(201).json({ url: session.url });
     } else {
-      console.log("session not found")
+      console.log("Session not found");
       res.status(400).json({ error: "try again" });
     }
   } catch (error) {
@@ -281,6 +442,7 @@ console.log("session",session)
     res.status(500).json({ message: "Something went wrong" });
   }
 };
+
 
 const updateBooking = async (req, res) => {
   const { bookingId } = req.params; // Booking ID
