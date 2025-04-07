@@ -2,7 +2,7 @@ const BoatModel = require("../models/boatModel");
 const bookingModel = require("../models/bookingModel");
 
 const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
-const CreateCheckoutSession = async (userEmail,pricing, bookingId, bookingRef,instabookId, yachtId) => {
+const CreateCheckoutSession = async (userEmail,pricing, bookingId, bookingRef,instabookId, yachtId,FRONTEND_URL) => {
   const totalAmount = pricing?.totals?.totalRenterPayment || 0;
   const amountInCents = Math.round(totalAmount * 100);
 
@@ -38,8 +38,8 @@ console.log(userEmail)
         setup_future_usage: "off_session", // ✅ Ensures 3D Secure when required
       },
       allow_promotion_codes: true,
-      success_url: `${process.env.FRONTEND_URL}/success?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${process.env.FRONTEND_URL}/book-now/${yachtId || "default-id"}/${instabookId}`,
+      success_url: `${FRONTEND_URL||process.env.FRONTEND_URL}/success?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${FRONTEND_URL||process.env.FRONTEND_URL}/book-now/${yachtId || "default-id"}/${instabookId}`,
     });
 
     console.log("✅ Stripe Checkout URL:", session.url);

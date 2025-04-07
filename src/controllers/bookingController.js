@@ -151,7 +151,9 @@ const addBooking = async (req, res) => {
       exchangeRate = 1,
       name,
       email,
-      phone
+      phone,
+      FRONTEND_URL,
+
     } = req.body;
 
     let user;
@@ -234,7 +236,8 @@ console.log("user",user)
       savedBooking._id,
       savedBooking.bookingRef,
       instabookId,
-      yachtId
+      yachtId,
+      FRONTEND_URL
     );
 console.log("session",session)
     if (session) {
